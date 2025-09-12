@@ -5,6 +5,7 @@ import jsPDF from 'jspdf';
 
 const App = () => {
     type AppState = 'INITIAL' | 'CAPTURING' | 'ANALYZING' | 'RESULTS' | 'IMPROVING' | 'IMPROVED';
+    type ResultsTab = 'RATINGS' | 'ROAST' | 'IMPROVEMENTS';
     type Analysis = {
         ratings: {
             overall: number;
@@ -43,6 +44,7 @@ const App = () => {
     }
 
     const [appState, setAppState] = useState<AppState>('INITIAL');
+    const [resultsTab, setResultsTab] = useState<ResultsTab>('RATINGS');
     const [userImage, setUserImage] = useState<string | null>(null);
     const [analysis, setAnalysis] = useState<Analysis | null>(null);
     const [improvedImage, setImprovedImage] = useState<string | null>(null);
@@ -297,6 +299,14 @@ const App = () => {
         setError(null);
         setIsLoading(false);
         setIsSharing(false);
+        setResultsTab('RATINGS');
+    };
+
+    const getColorForRating = (rating: number): string => {
+        if (rating >= 80) return 'var(--rating-green)';
+        if (rating >= 60) return 'var(--rating-yellow)';
+        if (rating >= 40) return 'var(--rating-orange)';
+        return 'var(--rating-red)';
     };
 
     const renderContent = () => {
@@ -304,83 +314,112 @@ const App = () => {
             case 'INITIAL':
                 return (
                     <>
-                        <h1 className="title">Looksmax AI</h1>
-                        <p className="subtitle">Get a brutally honest rating of your face and see your potential.</p>
-                        <button className="button" onClick={handleStart}>Analyze My Face</button>
+                        <div className="content-wrapper initial-view-animation">
+                            <h1 className="title">Looksmax AI</h1>
+                            <p className="subtitle">Get a brutally honest rating of your face and see your potential.</p>
+                        </div>
+                        <div className="footer-actions initial-view-animation">
+                            <button className="button" onClick={handleStart}>Analyze My Face</button>
+                        </div>
                     </>
                 );
             case 'CAPTURING':
                 return (
                     <>
-                        <h1 className="title">Position Your Face</h1>
-                        <div className="camera-container">
-                            <video id="camera-feed" ref={videoRef} autoPlay playsInline muted></video>
+                        <div className="content-wrapper">
+                            <h1 className="title">Position Your Face</h1>
+                            <div className="camera-container">
+                                <video id="camera-feed" ref={videoRef} autoPlay playsInline muted></video>
+                            </div>
                         </div>
-                        <button className="button" onClick={handleCapture}>Capture</button>
+                        <div className="footer-actions">
+                            <button className="button" onClick={handleCapture}>Capture</button>
+                        </div>
                     </>
                 );
             case 'ANALYZING':
             case 'IMPROVING':
                  return (
-                    <>
+                    <div className="content-wrapper">
                         <div className="loader"></div>
                         <h1 className="title">{appState === 'ANALYZING' ? 'Analyzing...' : 'Revealing Potential...'}</h1>
                         <p className="subtitle">{appState === 'ANALYZING' ? 'Our AI is roasting your features...' : 'Get ready for the glow-up...'}</p>
-                    </>
+                    </div>
                 );
             case 'RESULTS':
                 if (!analysis || !userImage) return null;
                 return (
                     <div className="results-container">
-                        <h1 className="title">Ratings</h1>
-                        <img src={userImage} alt="Your selfie" className="profile-image" />
-                         <div className="ratings-grid">
-                            {Object.entries(analysis.ratings).map(([key, value]) => (
-                                <div key={key} className="rating-item">
-                                    <p className="rating-label">{key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                                    <p className="rating-value">{value}</p>
-                                    <div className="progress-bar">
-                                        <div className="progress-bar-inner" style={{ width: `${value}%` }}></div>
+                        <div className="content-wrapper">
+                             <h1 className="title">Your Analysis</h1>
+                             <div className="segmented-control">
+                                 <button className={resultsTab === 'RATINGS' ? 'active' : ''} onClick={() => setResultsTab('RATINGS')}>Rating</button>
+                                 <button className={resultsTab === 'ROAST' ? 'active' : ''} onClick={() => setResultsTab('ROAST')}>Roast</button>
+                                 <button className={resultsTab === 'IMPROVEMENTS' ? 'active' : ''} onClick={() => setResultsTab('IMPROVEMENTS')}>Improve</button>
+                             </div>
+                             <div className="tab-content">
+                                {resultsTab === 'RATINGS' && (
+                                    <div className="ratings-tab" key="ratings">
+                                        <img src={userImage} alt="Your selfie" className="profile-image" />
+                                        <div className="ratings-grid">
+                                            {Object.entries(analysis.ratings).map(([key, value]) => (
+                                                <div key={key} className="rating-item">
+                                                    <p className="rating-label">{key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                                                    <p className="rating-value" style={{ color: getColorForRating(value) }}>{value}</p>
+                                                    <div className="progress-bar">
+                                                        <div className="progress-bar-inner" style={{ width: `${value}%`, backgroundColor: getColorForRating(value) }}></div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                )}
+                                {resultsTab === 'ROAST' && (
+                                     <div className="improvements-section" key="roast">
+                                        <h2 className="section-title">Brutal Roast</h2>
+                                        <p className="subtitle">{analysis.roast}</p>
+                                    </div>
+                                )}
+                                 {resultsTab === 'IMPROVEMENTS' && (
+                                    <div className="improvements-section" key="improvements">
+                                        <h2 className="section-title">How to Improve</h2>
+                                        <ul className="improvements-list">
+                                            {analysis.improvements.map((item, index) => <li key={index} style={{ animationDelay: `${index * 100}ms` }}>{item}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                             </div>
                         </div>
-                        <div className="improvements-section">
-                            <h2 className="section-title">Brutal Roast</h2>
-                            <p className="subtitle">{analysis.roast}</p>
+                         <div className="footer-actions">
+                            <button className="button" onClick={handleImprove}>Show My Potential</button>
+                            <button className="button text" onClick={handleReset}>Start Over</button>
                         </div>
-                        <div className="improvements-section">
-                            <h2 className="section-title">How to Improve</h2>
-                            <ul className="improvements-list">
-                                {analysis.improvements.map((item, index) => <li key={index}>{item}</li>)}
-                            </ul>
-                        </div>
-                        <button className="button" onClick={handleImprove}>Show Me My Potential</button>
-                        <button className="button" style={{background: 'none', color: 'var(--text-secondary-color)', marginTop: '1rem'}} onClick={handleReset}>Start Over</button>
                     </div>
                 );
             case 'IMPROVED':
                 if (!userImage || !improvedImage) return null;
                 return (
-                    <div className="image-comparison">
-                        <h1 className="title">Your Potential</h1>
-                        <div className="comparison-grid">
-                            <div className="comparison-item">
-                                <img src={userImage} alt="Before" className="comparison-image" />
-                                <p className="comparison-label">Before</p>
-                            </div>
-                            <div className="comparison-item">
-                                <img src={improvedImage} alt="After" className="comparison-image" />
-                                <p className="comparison-label">After</p>
+                    <>
+                        <div className="content-wrapper">
+                             <h1 className="title">Your Potential</h1>
+                            <div className="comparison-grid">
+                                <div className="comparison-item">
+                                    <img src={userImage} alt="Before" className="comparison-image" />
+                                    <p className="comparison-label">Before</p>
+                                </div>
+                                <div className="comparison-item">
+                                    <img src={improvedImage} alt="After" className="comparison-image" />
+                                    <p className="comparison-label">After</p>
+                                </div>
                             </div>
                         </div>
-                        <div className="button-group">
+                        <div className="footer-actions button-group">
                             <button className="button" onClick={handleShareAsPDF} disabled={isSharing}>
-                                {isSharing ? 'Generating PDF...' : 'Download PDF Report'}
+                                {isSharing ? 'Generating...' : 'Download Report'}
                             </button>
                             <button className="button secondary" onClick={handleReset}>Analyze Again</button>
                         </div>
-                    </div>
+                    </>
                 );
             default:
                 return null;
