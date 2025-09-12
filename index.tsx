@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleGenAI, Type, Modality } from "@google/genai";
+import jsPDF from 'jspdf';
 
 const App = () => {
     type AppState = 'INITIAL' | 'CAPTURING' | 'ANALYZING' | 'RESULTS' | 'IMPROVING' | 'IMPROVED';
@@ -17,12 +18,37 @@ const App = () => {
         improvements: string[];
     };
 
+    // This check is crucial for deployment on external platforms.
+    if (!process.env.API_KEY) {
+        return (
+            <main className="container">
+                <div style={{
+                    backgroundColor: 'rgba(255, 77, 77, 0.1)',
+                    color: '#ff4d4d',
+                    padding: '1.5rem',
+                    borderRadius: '1rem',
+                    textAlign: 'left',
+                    border: '1px solid rgba(255, 77, 77, 0.2)',
+                    width: '100%',
+                }}>
+                    <h1 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#ff6b6b' }}>Configuration Error</h1>
+                    <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text-color)' }}>
+                        The AI features are disabled because the Gemini API key is missing.
+                        <br /><br />
+                        To fix this, please configure the <code>API_KEY</code> environment variable in your deployment platform's settings (e.g., Vercel, Netlify, or GitHub Pages).
+                    </p>
+                </div>
+            </main>
+        );
+    }
+
     const [appState, setAppState] = useState<AppState>('INITIAL');
     const [userImage, setUserImage] = useState<string | null>(null);
     const [analysis, setAnalysis] = useState<Analysis | null>(null);
     const [improvedImage, setImprovedImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isSharing, setIsSharing] = useState<boolean>(false);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -164,6 +190,105 @@ const App = () => {
         }
     };
 
+    const handleShareAsPDF = async () => {
+        if (!analysis || !userImage || !improvedImage) return;
+
+        setIsSharing(true);
+        try {
+            const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+            // --- Page 1 ---
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(22);
+            doc.setTextColor('#1a1a1a');
+            doc.text('Looksmax AI Analysis', 105, 25, { align: 'center' });
+
+            doc.setFontSize(14);
+            doc.text('Before', 60, 40, { align: 'center' });
+            doc.addImage(userImage, 'JPEG', 25, 45, 70, 70);
+            doc.text('After', 150, 40, { align: 'center' });
+            doc.addImage(improvedImage, 'JPEG', 115, 45, 70, 70);
+            
+            let y = 130;
+
+            doc.setFontSize(18);
+            doc.text('Ratings', 15, y);
+            doc.setLineWidth(0.5);
+            doc.line(15, y + 2, 195, y + 2);
+            y += 12;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(12);
+            doc.setTextColor('#333333');
+            
+            const ratings = Object.entries(analysis.ratings);
+            const midPoint = Math.ceil(ratings.length / 2);
+            let initialY = y;
+            ratings.slice(0, midPoint).forEach(([key, value]) => {
+                const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                doc.text(`${label}:`, 20, y);
+                doc.text(`${value} / 100`, 80, y, {align: 'right'});
+                y += 9;
+            });
+            y = initialY;
+            ratings.slice(midPoint).forEach(([key, value]) => {
+                const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                doc.text(`${label}:`, 115, y);
+                doc.text(`${value} / 100`, 175, y, {align: 'right'});
+                y += 9;
+            });
+
+            y = Math.max(y, initialY + midPoint * 9) + 10;
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.setTextColor('#1a1a1a');
+            doc.text('Brutal Roast', 15, y);
+            doc.line(15, y + 2, 195, y + 2);
+            y += 10;
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(11);
+            doc.setTextColor('#333333');
+            const roastLines = doc.splitTextToSize(analysis.roast, 180);
+            doc.text(roastLines, 15, y);
+            
+            // --- Page 2 ---
+            doc.addPage();
+            y = 25;
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.setTextColor('#1a1a1a');
+            doc.text('How to Improve', 15, y);
+            doc.line(15, y + 2, 195, y + 2);
+            y += 12;
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(11);
+            doc.setTextColor('#333333');
+
+            analysis.improvements.forEach(item => {
+                if (y > 270) { 
+                    doc.addPage();
+                    y = 25;
+                }
+                const improvementLines = doc.splitTextToSize(item, 175);
+                doc.text('•', 20, y);
+                doc.text(improvementLines, 25, y);
+                y += (improvementLines.length * 4.5) + 4;
+            });
+
+            doc.save('looksmax-analysis.pdf');
+        } catch (e) {
+            console.error("Failed to generate PDF", e);
+            setError("Sorry, we couldn't create the PDF report.");
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+
     const handleReset = () => {
         setAppState('INITIAL');
         setUserImage(null);
@@ -171,6 +296,7 @@ const App = () => {
         setImprovedImage(null);
         setError(null);
         setIsLoading(false);
+        setIsSharing(false);
     };
 
     const renderContent = () => {
@@ -248,7 +374,12 @@ const App = () => {
                                 <p className="comparison-label">After</p>
                             </div>
                         </div>
-                        <button className="button" onClick={handleReset}>Analyze Again</button>
+                        <div className="button-group">
+                            <button className="button" onClick={handleShareAsPDF} disabled={isSharing}>
+                                {isSharing ? 'Generating PDF...' : 'Download PDF Report'}
+                            </button>
+                            <button className="button secondary" onClick={handleReset}>Analyze Again</button>
+                        </div>
                     </div>
                 );
             default:
