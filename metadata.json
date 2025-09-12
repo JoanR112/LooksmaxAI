@@ -1,0 +1,7 @@
+{
+  "name": "Looksmax AI",
+  "description": "An AI-powered app that analyzes your facial features, provides ratings, and shows you how to improve.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
